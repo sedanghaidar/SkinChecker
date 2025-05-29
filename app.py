@@ -1,9 +1,9 @@
-import gradio as gr
+import streamlit as st
 import numpy as np
 import cv2
+from PIL import Image
 from tensorflow.keras.models import load_model
 from tensorflow.keras.preprocessing.image import img_to_array
-from PIL import Image
 
 # Load model
 model = load_model("skincare.h5")
@@ -54,53 +54,48 @@ skincare_recommendations = {
     }
 }
 
-# Fungsi deteksi wajah dengan OpenCV
+# Fungsi deteksi wajah
 def is_face_detected(image):
-    # Convert to OpenCV format
     img = np.array(image.convert('RGB'))
     gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-
-    # Load Haar Cascade detector
     face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
     faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5)
-
     return len(faces) > 0
 
-# Fungsi klasifikasi kulit
+# Fungsi klasifikasi
 def classify_skin(image):
-    if not is_face_detected(image):
-        return "❌ **Gambar tidak mengandung wajah. Harap upload ulang dengan wajah yang terlihat jelas.**"
-
-    # Preprocess image
     img = image.resize((224, 224))
     img_array = img_to_array(img) / 255.0
     img_array = np.expand_dims(img_array, axis=0)
-
-    # Predict
     prediction = model.predict(img_array)[0]
     index = np.argmax(prediction)
     skin_type = labels[index]
-    recommendation = skincare_recommendations[skin_type]
+    return skin_type
 
-    skincare_list = "\n- ".join(recommendation['skincare'])
-    tips_list = "\n- ".join(recommendation['tips'])
+# Tampilan Streamlit
+st.set_page_config(page_title="Deteksi Jenis Kulit Wajah", layout="centered")
+st.title("🧑‍⚕️ Deteksi Jenis Kulit Wajah")
+st.write("Upload foto wajah kamu untuk mengetahui jenis kulit dan mendapatkan rekomendasi skincare.")
 
-    # Format output dengan markdown agar tampil beda dan rapi
-    output = (
-        f"🧑 **Jenis Kulit Terdeteksi:** {skin_type}\n\n"
-        f"🧴 **Rekomendasi Skincare:**\n- {skincare_list}\n\n"
-        f"💡 **Tips Perawatan:**\n- {tips_list}"
-    )
-    return output
+uploaded_image = st.file_uploader("Upload gambar wajah", type=["jpg", "jpeg", "png"])
 
-# Gradio Interface
-demo = gr.Interface(
-    fn=classify_skin,
-    inputs=gr.Image(type="pil"),
-    outputs="markdown",
-    title="Deteksi Jenis Kulit Wajah",
-    description="Upload foto wajah untuk mengetahui jenis kulit (Dry, Normal, Oily) dan mendapatkan rekomendasi skincare."
-)
+if uploaded_image is not None:
+    image = Image.open(uploaded_image)
+    st.image(image, caption="Gambar yang diupload", use_column_width=True)
 
-if __name__ == "__main__":
-    demo.launch()
+    if is_face_detected(image):
+        skin_type = classify_skin(image)
+        rec = skincare_recommendations[skin_type]
+
+        st.markdown(f"### 🧑 Jenis Kulit Terdeteksi: **{skin_type}**")
+
+        st.markdown("### 🧴 Rekomendasi Skincare:")
+        for item in rec['skincare']:
+            st.markdown(f"- {item}")
+
+        st.markdown("### 💡 Tips Perawatan:")
+        for tip in rec['tips']:
+            st.markdown(f"- {tip}")
+    else:
+        st.warning("❌ Gambar tidak mengandung wajah. Harap upload ulang dengan wajah yang terlihat jelas.")
+
